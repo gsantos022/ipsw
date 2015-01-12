@@ -1,0 +1,1078 @@
+1 /*
+2  * Public libusb header file
+3  * Copyright © 2001 Johannes Erdfelt <johannes@erdfelt.com>
+4  * Copyright © 2007-2008 Daniel Drake <dsd@gentoo.org>
+5  * Copyright © 2012 Pete Batard <pete@akeo.ie>
+6  * Copyright © 2012 Nathan Hjelm <hjelmn@cs.unm.edu>
+7  * For more information, please visit: http://libusb.info
+8  *
+9  * This library is free software; you can redistribute it and/or
+10  * modify it under the terms of the GNU Lesser General Public
+11  * License as published by the Free Software Foundation; either
+12  * version 2.1 of the License, or (at your option) any later version.
+13  *
+14  * This library is distributed in the hope that it will be useful,
+15  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+16  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+17  * Lesser General Public License for more details.
+18  *
+19  * You should have received a copy of the GNU Lesser General Public
+20  * License along with this library; if not, write to the Free Software
+21  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+22  */
+23 
+24 #ifndef LIBUSB_H
+25 #define LIBUSB_H
+26 
+27 #ifdef _MSC_VER
+28 /* on MS environments, the inline keyword is available in C++ only */
+29 #if !defined(__cplusplus)
+30 #define inline __inline
+31 #endif
+32 /* ssize_t is also not available (copy/paste from MinGW) */
+33 #ifndef _SSIZE_T_DEFINED
+34 #define _SSIZE_T_DEFINED
+35 #undef ssize_t
+36 #ifdef _WIN64
+37  typedef __int64 ssize_t;
+38 #else
+39  typedef int ssize_t;
+40 #endif /* _WIN64 */
+41 #endif /* _SSIZE_T_DEFINED */
+42 #endif /* _MSC_VER */
+43 
+44 /* stdint.h is not available on older MSVC */
+45 #if defined(_MSC_VER) && (_MSC_VER < 1600) && (!defined(_STDINT)) && (!defined(_STDINT_H))
+46 typedef unsigned __int8 uint8_t;
+47 typedef unsigned __int16 uint16_t;
+48 typedef unsigned __int32 uint32_t;
+49 #else
+50 #include <stdint.h>
+51 #endif
+52 
+53 #if !defined(_WIN32_WCE)
+54 #include <sys/types.h>
+55 #endif
+56 
+57 #if defined(__linux) || defined(__APPLE__) || defined(__CYGWIN__) || defined(__HAIKU__)
+58 #include <sys/time.h>
+59 #endif
+60 
+61 #include <time.h>
+62 #include <limits.h>
+63 
+64 /* 'interface' might be defined as a macro on Windows, so we need to
+65  * undefine it so as not to break the current libusb API, because
+66  * libusb_config_descriptor has an 'interface' member
+67  * As this can be problematic if you include windows.h after libusb.h
+68  * in your sources, we force windows.h to be included first. */
+69 #if defined(_WIN32) || defined(__CYGWIN__) || defined(_WIN32_WCE)
+70 #include <windows.h>
+71 #if defined(interface)
+72 #undef interface
+73 #endif
+74 #if !defined(__CYGWIN__)
+75 #include <winsock.h>
+76 #endif
+77 #endif
+78 
+79 #if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
+80 #define LIBUSB_DEPRECATED_FOR(f) \
+81  __attribute__((deprecated("Use " #f " instead")))
+82 #else
+83 #define LIBUSB_DEPRECATED_FOR(f)
+84 #endif /* __GNUC__ */
+85 
+111 /* LIBUSB_CALL must be defined on both definition and declaration of libusb
+112  * functions. You'd think that declaration would be enough, but cygwin will
+113  * complain about conflicting types unless both are marked this way.
+114  * The placement of this macro is important too; it must appear after the
+115  * return type, before the function name. See internal documentation for
+116  * API_EXPORTED.
+117  */
+118 #if defined(_WIN32) || defined(__CYGWIN__) || defined(_WIN32_WCE)
+119 #define LIBUSB_CALL WINAPI
+120 #else
+121 #define LIBUSB_CALL
+122 #endif
+123 
+147 #define LIBUSB_API_VERSION 0x01000103
+148 
+149 /* The following is kept for compatibility, but will be deprecated in the future */
+150 #define LIBUSBX_API_VERSION LIBUSB_API_VERSION
+151 
+152 #ifdef __cplusplus
+153 extern "C" {
+154 #endif
+155 
+164 static inline uint16_t libusb_cpu_to_le16(const uint16_t x)
+165 {
+166  union {
+167  uint8_t b8[2];
+168  uint16_t b16;
+169  } _tmp;
+170  _tmp.b8[1] = (uint8_t) (x >> 8);
+171  _tmp.b8[0] = (uint8_t) (x & 0xff);
+172  return _tmp.b16;
+173 }
+174 
+183 #define libusb_le16_to_cpu libusb_cpu_to_le16
+184 
+185 /* standard USB stuff */
+186 
+189 enum libusb_class_code {
+194  LIBUSB_CLASS_PER_INTERFACE = 0,
+195 
+197  LIBUSB_CLASS_AUDIO = 1,
+198 
+200  LIBUSB_CLASS_COMM = 2,
+201 
+203  LIBUSB_CLASS_HID = 3,
+204 
+206  LIBUSB_CLASS_PHYSICAL = 5,
+207 
+209  LIBUSB_CLASS_PRINTER = 7,
+210 
+212  LIBUSB_CLASS_PTP = 6, /* legacy name from libusb-0.1 usb.h */
+213  LIBUSB_CLASS_IMAGE = 6,
+214 
+216  LIBUSB_CLASS_MASS_STORAGE = 8,
+217 
+219  LIBUSB_CLASS_HUB = 9,
+220 
+222  LIBUSB_CLASS_DATA = 10,
+223 
+225  LIBUSB_CLASS_SMART_CARD = 0x0b,
+226 
+228  LIBUSB_CLASS_CONTENT_SECURITY = 0x0d,
+229 
+231  LIBUSB_CLASS_VIDEO = 0x0e,
+232 
+234  LIBUSB_CLASS_PERSONAL_HEALTHCARE = 0x0f,
+235 
+237  LIBUSB_CLASS_DIAGNOSTIC_DEVICE = 0xdc,
+238 
+240  LIBUSB_CLASS_WIRELESS = 0xe0,
+241 
+243  LIBUSB_CLASS_APPLICATION = 0xfe,
+244 
+246  LIBUSB_CLASS_VENDOR_SPEC = 0xff
+247 };
+248 
+251 enum libusb_descriptor_type {
+253  LIBUSB_DT_DEVICE = 0x01,
+254 
+256  LIBUSB_DT_CONFIG = 0x02,
+257 
+259  LIBUSB_DT_STRING = 0x03,
+260 
+262  LIBUSB_DT_INTERFACE = 0x04,
+263 
+265  LIBUSB_DT_ENDPOINT = 0x05,
+266 
+268  LIBUSB_DT_BOS = 0x0f,
+269 
+271  LIBUSB_DT_DEVICE_CAPABILITY = 0x10,
+272 
+274  LIBUSB_DT_HID = 0x21,
+275 
+277  LIBUSB_DT_REPORT = 0x22,
+278 
+280  LIBUSB_DT_PHYSICAL = 0x23,
+281 
+283  LIBUSB_DT_HUB = 0x29,
+284 
+286  LIBUSB_DT_SUPERSPEED_HUB = 0x2a,
+287 
+289  LIBUSB_DT_SS_ENDPOINT_COMPANION = 0x30
+290 };
+291 
+292 /* Descriptor sizes per descriptor type */
+293 #define LIBUSB_DT_DEVICE_SIZE 18
+294 #define LIBUSB_DT_CONFIG_SIZE 9
+295 #define LIBUSB_DT_INTERFACE_SIZE 9
+296 #define LIBUSB_DT_ENDPOINT_SIZE 7
+297 #define LIBUSB_DT_ENDPOINT_AUDIO_SIZE 9 /* Audio extension */
+298 #define LIBUSB_DT_HUB_NONVAR_SIZE 7
+299 #define LIBUSB_DT_SS_ENDPOINT_COMPANION_SIZE 6
+300 #define LIBUSB_DT_BOS_SIZE 5
+301 #define LIBUSB_DT_DEVICE_CAPABILITY_SIZE 3
+302 
+303 /* BOS descriptor sizes */
+304 #define LIBUSB_BT_USB_2_0_EXTENSION_SIZE 7
+305 #define LIBUSB_BT_SS_USB_DEVICE_CAPABILITY_SIZE 10
+306 #define LIBUSB_BT_CONTAINER_ID_SIZE 20
+307 
+308 /* We unwrap the BOS => define its max size */
+309 #define LIBUSB_DT_BOS_MAX_SIZE ((LIBUSB_DT_BOS_SIZE) +\
+310  (LIBUSB_BT_USB_2_0_EXTENSION_SIZE) +\
+311  (LIBUSB_BT_SS_USB_DEVICE_CAPABILITY_SIZE) +\
+312  (LIBUSB_BT_CONTAINER_ID_SIZE))
+313 
+314 #define LIBUSB_ENDPOINT_ADDRESS_MASK 0x0f /* in bEndpointAddress */
+315 #define LIBUSB_ENDPOINT_DIR_MASK 0x80
+316 
+321 enum libusb_endpoint_direction {
+323  LIBUSB_ENDPOINT_IN = 0x80,
+324 
+326  LIBUSB_ENDPOINT_OUT = 0x00
+327 };
+328 
+329 #define LIBUSB_TRANSFER_TYPE_MASK 0x03 /* in bmAttributes */
+330 
+335 enum libusb_transfer_type {
+337  LIBUSB_TRANSFER_TYPE_CONTROL = 0,
+338 
+340  LIBUSB_TRANSFER_TYPE_ISOCHRONOUS = 1,
+341 
+343  LIBUSB_TRANSFER_TYPE_BULK = 2,
+344 
+346  LIBUSB_TRANSFER_TYPE_INTERRUPT = 3,
+347 
+349  LIBUSB_TRANSFER_TYPE_BULK_STREAM = 4,
+350 };
+351 
+354 enum libusb_standard_request {
+356  LIBUSB_REQUEST_GET_STATUS = 0x00,
+357 
+359  LIBUSB_REQUEST_CLEAR_FEATURE = 0x01,
+360 
+361  /* 0x02 is reserved */
+362 
+364  LIBUSB_REQUEST_SET_FEATURE = 0x03,
+365 
+366  /* 0x04 is reserved */
+367 
+369  LIBUSB_REQUEST_SET_ADDRESS = 0x05,
+370 
+372  LIBUSB_REQUEST_GET_DESCRIPTOR = 0x06,
+373 
+375  LIBUSB_REQUEST_SET_DESCRIPTOR = 0x07,
+376 
+378  LIBUSB_REQUEST_GET_CONFIGURATION = 0x08,
+379 
+381  LIBUSB_REQUEST_SET_CONFIGURATION = 0x09,
+382 
+384  LIBUSB_REQUEST_GET_INTERFACE = 0x0A,
+385 
+387  LIBUSB_REQUEST_SET_INTERFACE = 0x0B,
+388 
+390  LIBUSB_REQUEST_SYNCH_FRAME = 0x0C,
+391 
+393  LIBUSB_REQUEST_SET_SEL = 0x30,
+394 
+397  LIBUSB_SET_ISOCH_DELAY = 0x31,
+398 };
+399 
+404 enum libusb_request_type {
+406  LIBUSB_REQUEST_TYPE_STANDARD = (0x00 << 5),
+407 
+409  LIBUSB_REQUEST_TYPE_CLASS = (0x01 << 5),
+410 
+412  LIBUSB_REQUEST_TYPE_VENDOR = (0x02 << 5),
+413 
+415  LIBUSB_REQUEST_TYPE_RESERVED = (0x03 << 5)
+416 };
+417 
+422 enum libusb_request_recipient {
+424  LIBUSB_RECIPIENT_DEVICE = 0x00,
+425 
+427  LIBUSB_RECIPIENT_INTERFACE = 0x01,
+428 
+430  LIBUSB_RECIPIENT_ENDPOINT = 0x02,
+431 
+433  LIBUSB_RECIPIENT_OTHER = 0x03,
+434 };
+435 
+436 #define LIBUSB_ISO_SYNC_TYPE_MASK 0x0C
+437 
+443 enum libusb_iso_sync_type {
+445  LIBUSB_ISO_SYNC_TYPE_NONE = 0,
+446 
+448  LIBUSB_ISO_SYNC_TYPE_ASYNC = 1,
+449 
+451  LIBUSB_ISO_SYNC_TYPE_ADAPTIVE = 2,
+452 
+454  LIBUSB_ISO_SYNC_TYPE_SYNC = 3
+455 };
+456 
+457 #define LIBUSB_ISO_USAGE_TYPE_MASK 0x30
+458 
+464 enum libusb_iso_usage_type {
+466  LIBUSB_ISO_USAGE_TYPE_DATA = 0,
+467 
+469  LIBUSB_ISO_USAGE_TYPE_FEEDBACK = 1,
+470 
+472  LIBUSB_ISO_USAGE_TYPE_IMPLICIT = 2,
+473 };
+474 
+480 struct libusb_device_descriptor {
+482  uint8_t bLength;
+483 
+487  uint8_t bDescriptorType;
+488 
+491  uint16_t bcdUSB;
+492 
+494  uint8_t bDeviceClass;
+495 
+498  uint8_t bDeviceSubClass;
+499 
+502  uint8_t bDeviceProtocol;
+503 
+505  uint8_t bMaxPacketSize0;
+506 
+508  uint16_t idVendor;
+509 
+511  uint16_t idProduct;
+512 
+514  uint16_t bcdDevice;
+515 
+517  uint8_t iManufacturer;
+518 
+520  uint8_t iProduct;
+521 
+523  uint8_t iSerialNumber;
+524 
+526  uint8_t bNumConfigurations;
+527 };
+528 
+534 struct libusb_endpoint_descriptor {
+536  uint8_t bLength;
+537 
+541  uint8_t bDescriptorType;
+542 
+547  uint8_t bEndpointAddress;
+548 
+556  uint8_t bmAttributes;
+557 
+559  uint16_t wMaxPacketSize;
+560 
+562  uint8_t bInterval;
+563 
+566  uint8_t bRefresh;
+567 
+569  uint8_t bSynchAddress;
+570 
+573  const unsigned char *extra;
+574 
+576  int extra_length;
+577 };
+578 
+584 struct libusb_interface_descriptor {
+586  uint8_t bLength;
+587 
+591  uint8_t bDescriptorType;
+592 
+594  uint8_t bInterfaceNumber;
+595 
+597  uint8_t bAlternateSetting;
+598 
+601  uint8_t bNumEndpoints;
+602 
+604  uint8_t bInterfaceClass;
+605 
+608  uint8_t bInterfaceSubClass;
+609 
+612  uint8_t bInterfaceProtocol;
+613 
+615  uint8_t iInterface;
+616 
+619  const struct libusb_endpoint_descriptor *endpoint;
+620 
+623  const unsigned char *extra;
+624 
+626  int extra_length;
+627 };
+628 
+632 struct libusb_interface {
+635  const struct libusb_interface_descriptor *altsetting;
+636 
+638  int num_altsetting;
+639 };
+640 
+646 struct libusb_config_descriptor {
+648  uint8_t bLength;
+649 
+653  uint8_t bDescriptorType;
+654 
+656  uint16_t wTotalLength;
+657 
+659  uint8_t bNumInterfaces;
+660 
+662  uint8_t bConfigurationValue;
+663 
+665  uint8_t iConfiguration;
+666 
+668  uint8_t bmAttributes;
+669 
+673  uint8_t MaxPower;
+674 
+677  const struct libusb_interface *interface;
+678 
+681  const unsigned char *extra;
+682 
+684  int extra_length;
+685 };
+686 
+693 struct libusb_ss_endpoint_companion_descriptor {
+694 
+696  uint8_t bLength;
+697 
+701  uint8_t bDescriptorType;
+702 
+703 
+706  uint8_t bMaxBurst;
+707 
+712  uint8_t bmAttributes;
+713 
+716  uint16_t wBytesPerInterval;
+717 };
+718 
+724 struct libusb_bos_dev_capability_descriptor {
+726  uint8_t bLength;
+730  uint8_t bDescriptorType;
+732  uint8_t bDevCapabilityType;
+734  uint8_t dev_capability_data
+735 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
+736  [] /* valid C99 code */
+737 #else
+738  [0] /* non-standard, but usually working code */
+739 #endif
+740  ;
+741 };
+742 
+748 struct libusb_bos_descriptor {
+750  uint8_t bLength;
+751 
+755  uint8_t bDescriptorType;
+756 
+758  uint16_t wTotalLength;
+759 
+762  uint8_t bNumDeviceCaps;
+763 
+765  struct libusb_bos_dev_capability_descriptor *dev_capability
+766 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
+767  [] /* valid C99 code */
+768 #else
+769  [0] /* non-standard, but usually working code */
+770 #endif
+771  ;
+772 };
+773 
+779 struct libusb_usb_2_0_extension_descriptor {
+781  uint8_t bLength;
+782 
+786  uint8_t bDescriptorType;
+787 
+791  uint8_t bDevCapabilityType;
+792 
+797  uint32_t bmAttributes;
+798 };
+799 
+805 struct libusb_ss_usb_device_capability_descriptor {
+807  uint8_t bLength;
+808 
+812  uint8_t bDescriptorType;
+813 
+817  uint8_t bDevCapabilityType;
+818 
+823  uint8_t bmAttributes;
+824 
+827  uint16_t wSpeedSupported;
+828 
+833  uint8_t bFunctionalitySupport;
+834 
+836  uint8_t bU1DevExitLat;
+837 
+839  uint16_t bU2DevExitLat;
+840 };
+841 
+847 struct libusb_container_id_descriptor {
+849  uint8_t bLength;
+850 
+854  uint8_t bDescriptorType;
+855 
+859  uint8_t bDevCapabilityType;
+860 
+862  uint8_t bReserved;
+863 
+865  uint8_t ContainerID[16];
+866 };
+867 
+870 struct libusb_control_setup {
+876  uint8_t bmRequestType;
+877 
+883  uint8_t bRequest;
+884 
+886  uint16_t wValue;
+887 
+890  uint16_t wIndex;
+891 
+893  uint16_t wLength;
+894 };
+895 
+896 #define LIBUSB_CONTROL_SETUP_SIZE (sizeof(struct libusb_control_setup))
+897 
+898 /* libusb */
+899 
+900 struct libusb_context;
+901 struct libusb_device;
+902 struct libusb_device_handle;
+903 
+907 struct libusb_version {
+909  const uint16_t major;
+910 
+912  const uint16_t minor;
+913 
+915  const uint16_t micro;
+916 
+918  const uint16_t nano;
+919 
+921  const char *rc;
+922 
+924  const char* describe;
+925 };
+926 
+944 typedef struct libusb_context libusb_context;
+945 
+961 typedef struct libusb_device libusb_device;
+962 
+963 
+972 typedef struct libusb_device_handle libusb_device_handle;
+973 
+977 enum libusb_speed {
+979  LIBUSB_SPEED_UNKNOWN = 0,
+980 
+982  LIBUSB_SPEED_LOW = 1,
+983 
+985  LIBUSB_SPEED_FULL = 2,
+986 
+988  LIBUSB_SPEED_HIGH = 3,
+989 
+991  LIBUSB_SPEED_SUPER = 4,
+992 };
+993 
+998 enum libusb_supported_speed {
+1000  LIBUSB_LOW_SPEED_OPERATION = 1,
+1001 
+1003  LIBUSB_FULL_SPEED_OPERATION = 2,
+1004 
+1006  LIBUSB_HIGH_SPEED_OPERATION = 4,
+1007 
+1009  LIBUSB_SUPER_SPEED_OPERATION = 8,
+1010 };
+1011 
+1017 enum libusb_usb_2_0_extension_attributes {
+1019  LIBUSB_BM_LPM_SUPPORT = 2,
+1020 };
+1021 
+1027 enum libusb_ss_usb_device_capability_attributes {
+1029  LIBUSB_BM_LTM_SUPPORT = 2,
+1030 };
+1031 
+1035 enum libusb_bos_type {
+1037  LIBUSB_BT_WIRELESS_USB_DEVICE_CAPABILITY = 1,
+1038 
+1040  LIBUSB_BT_USB_2_0_EXTENSION = 2,
+1041 
+1043  LIBUSB_BT_SS_USB_DEVICE_CAPABILITY = 3,
+1044 
+1046  LIBUSB_BT_CONTAINER_ID = 4,
+1047 };
+1048 
+1056 enum libusb_error {
+1058  LIBUSB_SUCCESS = 0,
+1059 
+1061  LIBUSB_ERROR_IO = -1,
+1062 
+1064  LIBUSB_ERROR_INVALID_PARAM = -2,
+1065 
+1067  LIBUSB_ERROR_ACCESS = -3,
+1068 
+1070  LIBUSB_ERROR_NO_DEVICE = -4,
+1071 
+1073  LIBUSB_ERROR_NOT_FOUND = -5,
+1074 
+1076  LIBUSB_ERROR_BUSY = -6,
+1077 
+1079  LIBUSB_ERROR_TIMEOUT = -7,
+1080 
+1082  LIBUSB_ERROR_OVERFLOW = -8,
+1083 
+1085  LIBUSB_ERROR_PIPE = -9,
+1086 
+1088  LIBUSB_ERROR_INTERRUPTED = -10,
+1089 
+1091  LIBUSB_ERROR_NO_MEM = -11,
+1092 
+1094  LIBUSB_ERROR_NOT_SUPPORTED = -12,
+1095 
+1096  /* NB: Remember to update LIBUSB_ERROR_COUNT below as well as the
+1097  message strings in strerror.c when adding new error codes here. */
+1098 
+1100  LIBUSB_ERROR_OTHER = -99,
+1101 };
+1102 
+1103 /* Total number of error codes in enum libusb_error */
+1104 #define LIBUSB_ERROR_COUNT 14
+1105 
+1108 enum libusb_transfer_status {
+1111  LIBUSB_TRANSFER_COMPLETED,
+1112 
+1114  LIBUSB_TRANSFER_ERROR,
+1115 
+1117  LIBUSB_TRANSFER_TIMED_OUT,
+1118 
+1120  LIBUSB_TRANSFER_CANCELLED,
+1121 
+1124  LIBUSB_TRANSFER_STALL,
+1125 
+1127  LIBUSB_TRANSFER_NO_DEVICE,
+1128 
+1130  LIBUSB_TRANSFER_OVERFLOW,
+1131 
+1132  /* NB! Remember to update libusb_error_name()
+1133  when adding new status codes here. */
+1134 };
+1135 
+1138 enum libusb_transfer_flags {
+1140  LIBUSB_TRANSFER_SHORT_NOT_OK = 1<<0,
+1141 
+1143  LIBUSB_TRANSFER_FREE_BUFFER = 1<<1,
+1144 
+1149  LIBUSB_TRANSFER_FREE_TRANSFER = 1<<2,
+1150 
+1174  LIBUSB_TRANSFER_ADD_ZERO_PACKET = 1 << 3,
+1175 };
+1176 
+1179 struct libusb_iso_packet_descriptor {
+1181  unsigned int length;
+1182 
+1184  unsigned int actual_length;
+1185 
+1187  enum libusb_transfer_status status;
+1188 };
+1189 
+1190 struct libusb_transfer;
+1191 
+1201 typedef void (LIBUSB_CALL *libusb_transfer_cb_fn)(struct libusb_transfer *transfer);
+1202 
+1209 struct libusb_transfer {
+1211  libusb_device_handle *dev_handle;
+1212 
+1214  uint8_t flags;
+1215 
+1217  unsigned char endpoint;
+1218 
+1220  unsigned char type;
+1221 
+1224  unsigned int timeout;
+1225 
+1233  enum libusb_transfer_status status;
+1234 
+1236  int length;
+1237 
+1241  int actual_length;
+1242 
+1245  libusb_transfer_cb_fn callback;
+1246 
+1248  void *user_data;
+1249 
+1251  unsigned char *buffer;
+1252 
+1255  int num_iso_packets;
+1256 
+1258  struct libusb_iso_packet_descriptor iso_packet_desc
+1259 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L)
+1260  [] /* valid C99 code */
+1261 #else
+1262  [0] /* non-standard, but usually working code */
+1263 #endif
+1264  ;
+1265 };
+1266 
+1272 enum libusb_capability {
+1274  LIBUSB_CAP_HAS_CAPABILITY = 0x0000,
+1276  LIBUSB_CAP_HAS_HOTPLUG = 0x0001,
+1281  LIBUSB_CAP_HAS_HID_ACCESS = 0x0100,
+1284  LIBUSB_CAP_SUPPORTS_DETACH_KERNEL_DRIVER = 0x0101
+1285 };
+1286 
+1297 enum libusb_log_level {
+1298  LIBUSB_LOG_LEVEL_NONE = 0,
+1299  LIBUSB_LOG_LEVEL_ERROR,
+1300  LIBUSB_LOG_LEVEL_WARNING,
+1301  LIBUSB_LOG_LEVEL_INFO,
+1302  LIBUSB_LOG_LEVEL_DEBUG,
+1303 };
+1304 
+1305 int LIBUSB_CALL libusb_init(libusb_context **ctx);
+1306 void LIBUSB_CALL libusb_exit(libusb_context *ctx);
+1307 void LIBUSB_CALL libusb_set_debug(libusb_context *ctx, int level);
+1308 const struct libusb_version * LIBUSB_CALL libusb_get_version(void);
+1309 int LIBUSB_CALL libusb_has_capability(uint32_t capability);
+1310 const char * LIBUSB_CALL libusb_error_name(int errcode);
+1311 int LIBUSB_CALL libusb_setlocale(const char *locale);
+1312 const char * LIBUSB_CALL libusb_strerror(enum libusb_error errcode);
+1313 
+1314 ssize_t LIBUSB_CALL libusb_get_device_list(libusb_context *ctx,
+1315  libusb_device ***list);
+1316 void LIBUSB_CALL libusb_free_device_list(libusb_device **list,
+1317  int unref_devices);
+1318 libusb_device * LIBUSB_CALL libusb_ref_device(libusb_device *dev);
+1319 void LIBUSB_CALL libusb_unref_device(libusb_device *dev);
+1320 
+1321 int LIBUSB_CALL libusb_get_configuration(libusb_device_handle *dev,
+1322  int *config);
+1323 int LIBUSB_CALL libusb_get_device_descriptor(libusb_device *dev,
+1324  struct libusb_device_descriptor *desc);
+1325 int LIBUSB_CALL libusb_get_active_config_descriptor(libusb_device *dev,
+1326  struct libusb_config_descriptor **config);
+1327 int LIBUSB_CALL libusb_get_config_descriptor(libusb_device *dev,
+1328  uint8_t config_index, struct libusb_config_descriptor **config);
+1329 int LIBUSB_CALL libusb_get_config_descriptor_by_value(libusb_device *dev,
+1330  uint8_t bConfigurationValue, struct libusb_config_descriptor **config);
+1331 void LIBUSB_CALL libusb_free_config_descriptor(
+1332  struct libusb_config_descriptor *config);
+1333 int LIBUSB_CALL libusb_get_ss_endpoint_companion_descriptor(
+1334  struct libusb_context *ctx,
+1335  const struct libusb_endpoint_descriptor *endpoint,
+1336  struct libusb_ss_endpoint_companion_descriptor **ep_comp);
+1337 void LIBUSB_CALL libusb_free_ss_endpoint_companion_descriptor(
+1338  struct libusb_ss_endpoint_companion_descriptor *ep_comp);
+1339 int LIBUSB_CALL libusb_get_bos_descriptor(libusb_device_handle *handle,
+1340  struct libusb_bos_descriptor **bos);
+1341 void LIBUSB_CALL libusb_free_bos_descriptor(struct libusb_bos_descriptor *bos);
+1342 int LIBUSB_CALL libusb_get_usb_2_0_extension_descriptor(
+1343  struct libusb_context *ctx,
+1344  struct libusb_bos_dev_capability_descriptor *dev_cap,
+1345  struct libusb_usb_2_0_extension_descriptor **usb_2_0_extension);
+1346 void LIBUSB_CALL libusb_free_usb_2_0_extension_descriptor(
+1347  struct libusb_usb_2_0_extension_descriptor *usb_2_0_extension);
+1348 int LIBUSB_CALL libusb_get_ss_usb_device_capability_descriptor(
+1349  struct libusb_context *ctx,
+1350  struct libusb_bos_dev_capability_descriptor *dev_cap,
+1351  struct libusb_ss_usb_device_capability_descriptor **ss_usb_device_cap);
+1352 void LIBUSB_CALL libusb_free_ss_usb_device_capability_descriptor(
+1353  struct libusb_ss_usb_device_capability_descriptor *ss_usb_device_cap);
+1354 int LIBUSB_CALL libusb_get_container_id_descriptor(struct libusb_context *ctx,
+1355  struct libusb_bos_dev_capability_descriptor *dev_cap,
+1356  struct libusb_container_id_descriptor **container_id);
+1357 void LIBUSB_CALL libusb_free_container_id_descriptor(
+1358  struct libusb_container_id_descriptor *container_id);
+1359 uint8_t LIBUSB_CALL libusb_get_bus_number(libusb_device *dev);
+1360 uint8_t LIBUSB_CALL libusb_get_port_number(libusb_device *dev);
+1361 int LIBUSB_CALL libusb_get_port_numbers(libusb_device *dev, uint8_t* port_numbers, int port_numbers_len);
+1362 LIBUSB_DEPRECATED_FOR(libusb_get_port_numbers)
+1363 int LIBUSB_CALL libusb_get_port_path(libusb_context *ctx, libusb_device *dev, uint8_t* path, uint8_t path_length);
+1364 libusb_device * LIBUSB_CALL libusb_get_parent(libusb_device *dev);
+1365 uint8_t LIBUSB_CALL libusb_get_device_address(libusb_device *dev);
+1366 int LIBUSB_CALL libusb_get_device_speed(libusb_device *dev);
+1367 int LIBUSB_CALL libusb_get_max_packet_size(libusb_device *dev,
+1368  unsigned char endpoint);
+1369 int LIBUSB_CALL libusb_get_max_iso_packet_size(libusb_device *dev,
+1370  unsigned char endpoint);
+1371 
+1372 int LIBUSB_CALL libusb_open(libusb_device *dev, libusb_device_handle **handle);
+1373 void LIBUSB_CALL libusb_close(libusb_device_handle *dev_handle);
+1374 libusb_device * LIBUSB_CALL libusb_get_device(libusb_device_handle *dev_handle);
+1375 
+1376 int LIBUSB_CALL libusb_set_configuration(libusb_device_handle *dev,
+1377  int configuration);
+1378 int LIBUSB_CALL libusb_claim_interface(libusb_device_handle *dev,
+1379  int interface_number);
+1380 int LIBUSB_CALL libusb_release_interface(libusb_device_handle *dev,
+1381  int interface_number);
+1382 
+1383 libusb_device_handle * LIBUSB_CALL libusb_open_device_with_vid_pid(
+1384  libusb_context *ctx, uint16_t vendor_id, uint16_t product_id);
+1385 
+1386 int LIBUSB_CALL libusb_set_interface_alt_setting(libusb_device_handle *dev,
+1387  int interface_number, int alternate_setting);
+1388 int LIBUSB_CALL libusb_clear_halt(libusb_device_handle *dev,
+1389  unsigned char endpoint);
+1390 int LIBUSB_CALL libusb_reset_device(libusb_device_handle *dev);
+1391 
+1392 int LIBUSB_CALL libusb_alloc_streams(libusb_device_handle *dev,
+1393  uint32_t num_streams, unsigned char *endpoints, int num_endpoints);
+1394 int LIBUSB_CALL libusb_free_streams(libusb_device_handle *dev,
+1395  unsigned char *endpoints, int num_endpoints);
+1396 
+1397 int LIBUSB_CALL libusb_kernel_driver_active(libusb_device_handle *dev,
+1398  int interface_number);
+1399 int LIBUSB_CALL libusb_detach_kernel_driver(libusb_device_handle *dev,
+1400  int interface_number);
+1401 int LIBUSB_CALL libusb_attach_kernel_driver(libusb_device_handle *dev,
+1402  int interface_number);
+1403 int LIBUSB_CALL libusb_set_auto_detach_kernel_driver(
+1404  libusb_device_handle *dev, int enable);
+1405 
+1406 /* async I/O */
+1407 
+1420 static inline unsigned char *libusb_control_transfer_get_data(
+1421  struct libusb_transfer *transfer)
+1422 {
+1423  return transfer->buffer + LIBUSB_CONTROL_SETUP_SIZE;
+1424 }
+1425 
+1438 static inline struct libusb_control_setup *libusb_control_transfer_get_setup(
+1439  struct libusb_transfer *transfer)
+1440 {
+1441  return (struct libusb_control_setup *)(void *) transfer->buffer;
+1442 }
+1443 
+1467 static inline void libusb_fill_control_setup(unsigned char *buffer,
+1468  uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
+1469  uint16_t wLength)
+1470 {
+1471  struct libusb_control_setup *setup = (struct libusb_control_setup *)(void *) buffer;
+1472  setup->bmRequestType = bmRequestType;
+1473  setup->bRequest = bRequest;
+1474  setup->wValue = libusb_cpu_to_le16(wValue);
+1475  setup->wIndex = libusb_cpu_to_le16(wIndex);
+1476  setup->wLength = libusb_cpu_to_le16(wLength);
+1477 }
+1478 
+1479 struct libusb_transfer * LIBUSB_CALL libusb_alloc_transfer(int iso_packets);
+1480 int LIBUSB_CALL libusb_submit_transfer(struct libusb_transfer *transfer);
+1481 int LIBUSB_CALL libusb_cancel_transfer(struct libusb_transfer *transfer);
+1482 void LIBUSB_CALL libusb_free_transfer(struct libusb_transfer *transfer);
+1483 void LIBUSB_CALL libusb_transfer_set_stream_id(
+1484  struct libusb_transfer *transfer, uint32_t stream_id);
+1485 uint32_t LIBUSB_CALL libusb_transfer_get_stream_id(
+1486  struct libusb_transfer *transfer);
+1487 
+1516 static inline void libusb_fill_control_transfer(
+1517  struct libusb_transfer *transfer, libusb_device_handle *dev_handle,
+1518  unsigned char *buffer, libusb_transfer_cb_fn callback, void *user_data,
+1519  unsigned int timeout)
+1520 {
+1521  struct libusb_control_setup *setup = (struct libusb_control_setup *)(void *) buffer;
+1522  transfer->dev_handle = dev_handle;
+1523  transfer->endpoint = 0;
+1524  transfer->type = LIBUSB_TRANSFER_TYPE_CONTROL;
+1525  transfer->timeout = timeout;
+1526  transfer->buffer = buffer;
+1527  if (setup)
+1528  transfer->length = (int) (LIBUSB_CONTROL_SETUP_SIZE
+1529  + libusb_le16_to_cpu(setup->wLength));
+1530  transfer->user_data = user_data;
+1531  transfer->callback = callback;
+1532 }
+1533 
+1547 static inline void libusb_fill_bulk_transfer(struct libusb_transfer *transfer,
+1548  libusb_device_handle *dev_handle, unsigned char endpoint,
+1549  unsigned char *buffer, int length, libusb_transfer_cb_fn callback,
+1550  void *user_data, unsigned int timeout)
+1551 {
+1552  transfer->dev_handle = dev_handle;
+1553  transfer->endpoint = endpoint;
+1554  transfer->type = LIBUSB_TRANSFER_TYPE_BULK;
+1555  transfer->timeout = timeout;
+1556  transfer->buffer = buffer;
+1557  transfer->length = length;
+1558  transfer->user_data = user_data;
+1559  transfer->callback = callback;
+1560 }
+1561 
+1578 static inline void libusb_fill_bulk_stream_transfer(
+1579  struct libusb_transfer *transfer, libusb_device_handle *dev_handle,
+1580  unsigned char endpoint, uint32_t stream_id,
+1581  unsigned char *buffer, int length, libusb_transfer_cb_fn callback,
+1582  void *user_data, unsigned int timeout)
+1583 {
+1584  libusb_fill_bulk_transfer(transfer, dev_handle, endpoint, buffer,
+1585  length, callback, user_data, timeout);
+1586  transfer->type = LIBUSB_TRANSFER_TYPE_BULK_STREAM;
+1587  libusb_transfer_set_stream_id(transfer, stream_id);
+1588 }
+1589 
+1603 static inline void libusb_fill_interrupt_transfer(
+1604  struct libusb_transfer *transfer, libusb_device_handle *dev_handle,
+1605  unsigned char endpoint, unsigned char *buffer, int length,
+1606  libusb_transfer_cb_fn callback, void *user_data, unsigned int timeout)
+1607 {
+1608  transfer->dev_handle = dev_handle;
+1609  transfer->endpoint = endpoint;
+1610  transfer->type = LIBUSB_TRANSFER_TYPE_INTERRUPT;
+1611  transfer->timeout = timeout;
+1612  transfer->buffer = buffer;
+1613  transfer->length = length;
+1614  transfer->user_data = user_data;
+1615  transfer->callback = callback;
+1616 }
+1617 
+1632 static inline void libusb_fill_iso_transfer(struct libusb_transfer *transfer,
+1633  libusb_device_handle *dev_handle, unsigned char endpoint,
+1634  unsigned char *buffer, int length, int num_iso_packets,
+1635  libusb_transfer_cb_fn callback, void *user_data, unsigned int timeout)
+1636 {
+1637  transfer->dev_handle = dev_handle;
+1638  transfer->endpoint = endpoint;
+1639  transfer->type = LIBUSB_TRANSFER_TYPE_ISOCHRONOUS;
+1640  transfer->timeout = timeout;
+1641  transfer->buffer = buffer;
+1642  transfer->length = length;
+1643  transfer->num_iso_packets = num_iso_packets;
+1644  transfer->user_data = user_data;
+1645  transfer->callback = callback;
+1646 }
+1647 
+1656 static inline void libusb_set_iso_packet_lengths(
+1657  struct libusb_transfer *transfer, unsigned int length)
+1658 {
+1659  int i;
+1660  for (i = 0; i < transfer->num_iso_packets; i++)
+1661  transfer->iso_packet_desc[i].length = length;
+1662 }
+1663 
+1680 static inline unsigned char *libusb_get_iso_packet_buffer(
+1681  struct libusb_transfer *transfer, unsigned int packet)
+1682 {
+1683  int i;
+1684  size_t offset = 0;
+1685  int _packet;
+1686 
+1687  /* oops..slight bug in the API. packet is an unsigned int, but we use
+1688  * signed integers almost everywhere else. range-check and convert to
+1689  * signed to avoid compiler warnings. FIXME for libusb-2. */
+1690  if (packet > INT_MAX)
+1691  return NULL;
+1692  _packet = (int) packet;
+1693 
+1694  if (_packet >= transfer->num_iso_packets)
+1695  return NULL;
+1696 
+1697  for (i = 0; i < _packet; i++)
+1698  offset += transfer->iso_packet_desc[i].length;
+1699 
+1700  return transfer->buffer + offset;
+1701 }
+1702 
+1722 static inline unsigned char *libusb_get_iso_packet_buffer_simple(
+1723  struct libusb_transfer *transfer, unsigned int packet)
+1724 {
+1725  int _packet;
+1726 
+1727  /* oops..slight bug in the API. packet is an unsigned int, but we use
+1728  * signed integers almost everywhere else. range-check and convert to
+1729  * signed to avoid compiler warnings. FIXME for libusb-2. */
+1730  if (packet > INT_MAX)
+1731  return NULL;
+1732  _packet = (int) packet;
+1733 
+1734  if (_packet >= transfer->num_iso_packets)
+1735  return NULL;
+1736 
+1737  return transfer->buffer + ((int) transfer->iso_packet_desc[0].length * _packet);
+1738 }
+1739 
+1740 /* sync I/O */
+1741 
+1742 int LIBUSB_CALL libusb_control_transfer(libusb_device_handle *dev_handle,
+1743  uint8_t request_type, uint8_t bRequest, uint16_t wValue, uint16_t wIndex,
+1744  unsigned char *data, uint16_t wLength, unsigned int timeout);
+1745 
+1746 int LIBUSB_CALL libusb_bulk_transfer(libusb_device_handle *dev_handle,
+1747  unsigned char endpoint, unsigned char *data, int length,
+1748  int *actual_length, unsigned int timeout);
+1749 
+1750 int LIBUSB_CALL libusb_interrupt_transfer(libusb_device_handle *dev_handle,
+1751  unsigned char endpoint, unsigned char *data, int length,
+1752  int *actual_length, unsigned int timeout);
+1753 
+1766 static inline int libusb_get_descriptor(libusb_device_handle *dev,
+1767  uint8_t desc_type, uint8_t desc_index, unsigned char *data, int length)
+1768 {
+1769  return libusb_control_transfer(dev, LIBUSB_ENDPOINT_IN,
+1770  LIBUSB_REQUEST_GET_DESCRIPTOR, (uint16_t) ((desc_type << 8) | desc_index),
+1771  0, data, (uint16_t) length, 1000);
+1772 }
+1773 
+1788 static inline int libusb_get_string_descriptor(libusb_device_handle *dev,
+1789  uint8_t desc_index, uint16_t langid, unsigned char *data, int length)
+1790 {
+1791  return libusb_control_transfer(dev, LIBUSB_ENDPOINT_IN,
+1792  LIBUSB_REQUEST_GET_DESCRIPTOR, (uint16_t)((LIBUSB_DT_STRING << 8) | desc_index),
+1793  langid, data, (uint16_t) length, 1000);
+1794 }
+1795 
+1796 int LIBUSB_CALL libusb_get_string_descriptor_ascii(libusb_device_handle *dev,
+1797  uint8_t desc_index, unsigned char *data, int length);
+1798 
+1799 /* polling and timeouts */
+1800 
+1801 int LIBUSB_CALL libusb_try_lock_events(libusb_context *ctx);
+1802 void LIBUSB_CALL libusb_lock_events(libusb_context *ctx);
+1803 void LIBUSB_CALL libusb_unlock_events(libusb_context *ctx);
+1804 int LIBUSB_CALL libusb_event_handling_ok(libusb_context *ctx);
+1805 int LIBUSB_CALL libusb_event_handler_active(libusb_context *ctx);
+1806 void LIBUSB_CALL libusb_lock_event_waiters(libusb_context *ctx);
+1807 void LIBUSB_CALL libusb_unlock_event_waiters(libusb_context *ctx);
+1808 int LIBUSB_CALL libusb_wait_for_event(libusb_context *ctx, struct timeval *tv);
+1809 
+1810 int LIBUSB_CALL libusb_handle_events_timeout(libusb_context *ctx,
+1811  struct timeval *tv);
+1812 int LIBUSB_CALL libusb_handle_events_timeout_completed(libusb_context *ctx,
+1813  struct timeval *tv, int *completed);
+1814 int LIBUSB_CALL libusb_handle_events(libusb_context *ctx);
+1815 int LIBUSB_CALL libusb_handle_events_completed(libusb_context *ctx, int *completed);
+1816 int LIBUSB_CALL libusb_handle_events_locked(libusb_context *ctx,
+1817  struct timeval *tv);
+1818 int LIBUSB_CALL libusb_pollfds_handle_timeouts(libusb_context *ctx);
+1819 int LIBUSB_CALL libusb_get_next_timeout(libusb_context *ctx,
+1820  struct timeval *tv);
+1821 
+1825 struct libusb_pollfd {
+1827  int fd;
+1828 
+1833  short events;
+1834 };
+1835 
+1846 typedef void (LIBUSB_CALL *libusb_pollfd_added_cb)(int fd, short events,
+1847  void *user_data);
+1848 
+1858 typedef void (LIBUSB_CALL *libusb_pollfd_removed_cb)(int fd, void *user_data);
+1859 
+1860 const struct libusb_pollfd ** LIBUSB_CALL libusb_get_pollfds(
+1861  libusb_context *ctx);
+1862 void LIBUSB_CALL libusb_set_pollfd_notifiers(libusb_context *ctx,
+1863  libusb_pollfd_added_cb added_cb, libusb_pollfd_removed_cb removed_cb,
+1864  void *user_data);
+1865 
+1878 typedef int libusb_hotplug_callback_handle;
+1879 
+1885 typedef enum {
+1887  LIBUSB_HOTPLUG_ENUMERATE = 1,
+1888 } libusb_hotplug_flag;
+1889 
+1895 typedef enum {
+1897  LIBUSB_HOTPLUG_EVENT_DEVICE_ARRIVED = 0x01,
+1898 
+1902  LIBUSB_HOTPLUG_EVENT_DEVICE_LEFT = 0x02,
+1903 } libusb_hotplug_event;
+1904 
+1907 #define LIBUSB_HOTPLUG_MATCH_ANY -1
+1908 
+1931 typedef int (LIBUSB_CALL *libusb_hotplug_callback_fn)(libusb_context *ctx,
+1932  libusb_device *device,
+1933  libusb_hotplug_event event,
+1934  void *user_data);
+1935 
+1970 int LIBUSB_CALL libusb_hotplug_register_callback(libusb_context *ctx,
+1971  libusb_hotplug_event events,
+1972  libusb_hotplug_flag flags,
+1973  int vendor_id, int product_id,
+1974  int dev_class,
+1975  libusb_hotplug_callback_fn cb_fn,
+1976  void *user_data,
+1977  libusb_hotplug_callback_handle *handle);
+1978 
+1990 void LIBUSB_CALL libusb_hotplug_deregister_callback(libusb_context *ctx,
+1991  libusb_hotplug_callback_handle handle);
+1992 
+1993 #ifdef __cplusplus
+1994 }
+1995 #endif
+1996 
+1997 #endif
